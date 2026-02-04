@@ -28,11 +28,12 @@ public class WebConfig extends WebSecurityConfigurerAdapter implements WebMvcCon
 
 package com.banking.api.controller;
 
-import com.banking.api.dto.TransactionRequest;
-import com.banking.api.dto.TransactionResponse;
+import com.banking.account.domain.Account;
+import com.banking.account.service.AccountService;
+import com.banking.api.dto.AccountCreateRequest;
+import com.banking.api.dto.AccountResponse;
+import com.banking.core.domain.AccountType;
 import com.banking.core.domain.Money;
-import com.banking.transaction.domain.Transaction;
-import com.banking.transaction.service.TransactionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,73 +43,65 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/transactions")
-@CrossOrigin(origins = "https://trusted-origin.com")
-public class TransactionController {
+@RequestMapping("/api/accounts")
+@CrossOrigin(origins = "https://trusted-origin.com", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST})
+public class AccountController {
 
-    private final TransactionService transactionService;
+    private final AccountService accountService;
 
     @Autowired
-    public TransactionController(TransactionService transactionService) {
-        this.transactionService = transactionService;
+    public AccountController(AccountService accountService) {
+        this.accountService = accountService;
     }
 
-    @PostMapping("/deposit")
-    public ResponseEntity<TransactionResponse> deposit(@RequestBody TransactionRequest request) {
-        Transaction transaction = transactionService.deposit(
-            request.getAccountId(),
-            new Money(request.getAmount(), request.getCurrency()),
-            request.getDescription()
+    @PostMapping
+    public ResponseEntity<AccountResponse> createAccount(@RequestBody AccountCreateRequest request) {
+        Account account = accountService.createAccount(
+            request.getCustomerId(),
+            AccountType.valueOf(request.getAccountType()),
+            new Money(request.getInitialBalance(), request.getCurrency())
         );
-        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(transaction));
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(account));
     }
 
-    @PostMapping("/withdraw")
-    public ResponseEntity<TransactionResponse> withdraw(@RequestBody TransactionRequest request) {
-        Transaction transaction = transactionService.withdraw(
-            request.getAccountId(),
-            new Money(request.getAmount(), request.getCurrency()),
-            request.getDescription()
-        );
-        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(transaction));
+    @GetMapping("/{accountId}")
+    public ResponseEntity<AccountResponse> getAccount(@PathVariable String accountId) {
+        Account account = accountService.getAccount(accountId);
+        return ResponseEntity.ok(toResponse(account));
     }
 
-    @PostMapping("/transfer")
-    public ResponseEntity<TransactionResponse> transfer(@RequestBody TransactionRequest request) {
-        Transaction transaction = transactionService.transfer(
-            request.getFromAccountId(),
-            request.getToAccountId(),
-            new Money(request.getAmount(), request.getCurrency()),
-            request.getDescription()
-        );
-        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(transaction));
-    }
-
-    @GetMapping("/account/{accountId}")
-    public ResponseEntity<List<TransactionResponse>> getTransactionsByAccount(@PathVariable String accountId) {
-        List<Transaction> transactions = transactionService.getTransactionsByAccount(accountId);
-        List<TransactionResponse> responses = transactions.stream()
+    @GetMapping("/customer/{customerId}")
+    public ResponseEntity<List<AccountResponse>> getAccountsByCustomer(@PathVariable String customerId) {
+        List<Account> accounts = accountService.getAccountsByCustomer(customerId);
+        List<AccountResponse> responses = accounts.stream()
             .map(this::toResponse)
             .collect(Collectors.toList());
         return ResponseEntity.ok(responses);
     }
 
-    @GetMapping("/{transactionId}")
-    public ResponseEntity<TransactionResponse> getTransaction(@PathVariable String transactionId) {
-        Transaction transaction = transactionService.getTransaction(transactionId);
-        return ResponseEntity.ok(toResponse(transaction));
+    @GetMapping
+    public ResponseEntity<List<AccountResponse>> getAllAccounts() {
+        List<Account> accounts = accountService.getAllAccounts();
+        List<AccountResponse> responses = accounts.stream()
+            .map(this::toResponse)
+            .collect(Collectors.toList());
+        return ResponseEntity.ok(responses);
     }
 
-    private TransactionResponse toResponse(Transaction transaction) {
-        TransactionResponse response = new TransactionResponse();
-        response.setTransactionId(transaction.getTransactionId());
-        response.setAccountId(transaction.getAccountId());
-        response.setType(transaction.getType().name());
-        response.setAmount(transaction.getAmount().getAmount().doubleValue());
-        response.setCurrency(transaction.getAmount().getCurrency());
-        response.setTimestamp(transaction.getTimestamp().toString());
-        response.setDescription(transaction.getDescription());
-        response.setRelatedAccountId(transaction.getRelatedAccountId());
+    @GetMapping("/{accountId}/balance")
+    public ResponseEntity<Money> getBalance(@PathVariable String accountId) {
+        Money balance = accountService.getBalance(accountId);
+        return ResponseEntity.ok(balance);
+    }
+
+    private AccountResponse toResponse(Account account) {
+        AccountResponse response = new AccountResponse();
+        response.setAccountId(account.getAccountId());
+        response.setCustomerId(account.getCustomerId());
+        response.setAccountType(account.getAccountType().name());
+        response.setBalance(account.getBalance().getAmount().doubleValue());
+        response.setCurrency(account.getBalance().getCurrency());
+        response.setActive(account.isActive());
         return response;
     }
 }
